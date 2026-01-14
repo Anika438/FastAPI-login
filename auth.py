@@ -12,8 +12,9 @@ from passlib.context import CryptContext
 router=APIRouter(prefix="/auth",tags=["auth"])
 SECRET_KEY="63f4945d921d599f27ae4fdf5bada3f1"
 ALGORITHM="HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
 bcrypt_context=CryptContext(schemes=["bcrypt"],deprecated="auto")
-oauth2_bearer=OAuth2PasswordBearer(tokenUrl="auth/token")
+oauth2_bearer=OAuth2PasswordBearer(tokenUrl="/auth/token")
 class createuser(BaseModel):
     username:str
     password:str
@@ -26,10 +27,35 @@ def get_db():
         yield db
     finally:
         db.close()
+def verify_password(plain_password,hashed_password):
+    return bcrypt_context.verify(plain_password,hashed_password)
+def create_access_token(username :str):
+    payload={"sub":username,"exp":datetime.utcnow()+timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)}
+    return jwt.encode(payload,SECRET_KEY,algorithm=ALGORITHM)
 db_dependency=Annotated[Session,Depends(get_db)]
 @router.post("/",status_code=status.HTTP_201_CREATED)
-async def create_user(db:db_dependency,user:createuser):
-    hashed_password=bcrypt_context.hash(user.password)
-    user_model=User(username=user.username,password=hashed_password)
-    db.add(user_model)
+def register_user(user: createuser, db: Session = Depends(get_db)):
+    existing = db.query(User).filter(User.username == user.username).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already exists")
+
+    hashed_password = bcrypt_context.hash(user.password)
+    new_user = User(
+        username=user.username,
+        hashed_password=hashed_password
+    )
+    db.add(new_user)
     db.commit()
+    return {"message": "User created successfully"}
+@router.post("/token", response_model=token)
+def login(form_data:OAuth2PasswordRequestForm = Depends(),db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.username == form_data.username).first()
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials"
+        )
+
+    token = create_access_token(user.username)
+    return {"access_token": token, "token_type": "bearer"}
