@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Annotated
-from fastapi import Depends, HTTPException, APIRouter
+from fastapi import Depends, HTTPException, APIRouter,Form,Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from pydantic import BaseModel
@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from database import SessionLocal
 from starlette import status
 from passlib.context import CryptContext
+from fastapi.responses import RedirectResponse
 router=APIRouter(prefix="/auth",tags=["auth"])
 SECRET_KEY="63f4945d921d599f27ae4fdf5bada3f1"
 ALGORITHM="HS256"
@@ -34,8 +35,8 @@ def create_access_token(username :str):
     return jwt.encode(payload,SECRET_KEY,algorithm=ALGORITHM)
 db_dependency=Annotated[Session,Depends(get_db)]
 @router.post("/",status_code=status.HTTP_201_CREATED)
-def register_user(user: createuser, db: Session = Depends(get_db)):
-    existing = db.query(User).filter(User.username == user.username).first()
+def register_user(user: str=Form(...),password: str=Form(...), db: Session = Depends(get_db)):
+    existing = db.query(User).filter(User.username == user).first()
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
 
@@ -47,7 +48,7 @@ def register_user(user: createuser, db: Session = Depends(get_db)):
     db.add(new_user)
     db.commit()
     return {"message": "User created successfully"}
-@router.post("/token", response_model=token)
+@router.post("/token")
 def login(form_data:OAuth2PasswordRequestForm = Depends(),db: Session = Depends(get_db)
 ):
     user = db.query(User).filter(User.username == form_data.username).first()
@@ -57,5 +58,32 @@ def login(form_data:OAuth2PasswordRequestForm = Depends(),db: Session = Depends(
             detail="Invalid credentials"
         )
 
-    token = create_access_token(user.username)
-    return {"access_token": token, "token_type": "bearer"}
+    access_token = create_access_token(user.username)
+    response = RedirectResponse(url="/dashboard", status_code=302)
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True
+    )
+    return response
+def get_current_user(request: Request):
+    token = request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated"
+        )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated"
+            )
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated"
+        )
+    return username

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: "Segoe UI", sans-serif;
+        }
+        .glass {
+            padding: 40px;
+            border-radius: 16px;
+            background: rgba(255,255,255,0.15);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255,255,255,0.25);
+            color: white;
+            text-align: center;
+        }
+        a {
+            display: inline-block;
+            margin-top: 20px;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="glass">
+    <h1>Hello, {{ user }} 👋</h1>
+    <p>You are successfully logged in.</p>
+    <a href="/logout">Logout</a>
+</div>
+
+</body>
+</html>
